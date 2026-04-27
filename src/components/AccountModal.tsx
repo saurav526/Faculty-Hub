@@ -16,7 +16,8 @@ const ALL_BLOCKS: BlockCode[] = [
 
 interface Props {
   account: FacultyAccount;
-  onSave: (updates: Partial<Omit<FacultyAccount, 'email' | 'createdAt'>>) => void;
+  onSave: (updates: Partial<Omit<FacultyAccount, 'email' | 'createdAt'>>) => Promise<void>;
+  onChangePin: (currentPin: string, newPin: string) => Promise<string | null>;
   onLogout: () => void;
   onDeleteAccount: () => void;
   onClose: () => void;
@@ -24,7 +25,7 @@ interface Props {
 
 type Section = 'profile' | 'security';
 
-export function AccountModal({ account, onSave, onLogout, onDeleteAccount, onClose }: Props) {
+export function AccountModal({ account, onSave, onChangePin, onLogout, onDeleteAccount, onClose }: Props) {
   const [section, setSection] = useState<Section>('profile');
   const [saved, setSaved] = useState(false);
 
@@ -77,14 +78,14 @@ export function AccountModal({ account, onSave, onLogout, onDeleteAccount, onClo
     setFloor(BLOCK_TO_FLOOR[b] ?? floor);
   };
 
-  const handleSaveProfile = () => {
+  const handleSaveProfile = async () => {
     const errs: typeof profileErrors = {};
     if (!name.trim()) errs.name = 'Name is required.';
     if (!cabin.trim()) errs.cabin = 'Cabin / seat is required.';
     setProfileErrors(errs);
     if (Object.keys(errs).length > 0) return;
 
-    onSave({
+    await onSave({
       title,
       name: name.trim(),
       fullName: `${title} ${name.trim()}`,
@@ -99,15 +100,18 @@ export function AccountModal({ account, onSave, onLogout, onDeleteAccount, onClo
     setTimeout(() => setSaved(false), 2500);
   };
 
-  const handleSavePin = () => {
+  const handleSavePin = async () => {
     const errs: typeof pinErrors = {};
-    if (currentPin !== account.pin) errs.currentPin = 'Current PIN is incorrect.';
     if (newPin.length !== 4) errs.newPin = 'New PIN must be exactly 4 digits.';
     if (confirmPin !== newPin) errs.confirmPin = 'PINs do not match.';
     setPinErrors(errs);
     if (Object.keys(errs).length > 0) return;
 
-    onSave({ pin: newPin });
+    const err = await onChangePin(currentPin, newPin);
+    if (err) {
+      setPinErrors({ currentPin: err });
+      return;
+    }
     setCurrentPin(''); setNewPin(''); setConfirmPin('');
     setPinSaved(true);
     setTimeout(() => setPinSaved(false), 2500);

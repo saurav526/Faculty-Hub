@@ -86,7 +86,7 @@ export interface FacultyProfiles {
 // ─── Faculty Account (proper sign-up / sign-in system) ───────────────────────
 export interface FacultyAccount {
   email: string;            // unique identifier + login credential
-  pin: string;              // 4-digit PIN (plain — no backend, client only)
+  pin?: string;             // only present in old localStorage data; backend never returns it
 
   // Personal info — fully editable by the faculty member
   title: FacultyTitle;

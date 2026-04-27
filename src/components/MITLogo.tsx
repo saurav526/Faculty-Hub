@@ -6,7 +6,7 @@ interface Props {
 }
 
 /** Accurate SVG seal matching the real MIT-ADT University logo */
-function MITSeal({ size }: { size: number }) {
+export function MITSeal({ size }: { size: number }) {
   // Dot ring around the gold border
   const dotCount = 60;
   const dotRadius = 94.5;

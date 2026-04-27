@@ -1,5 +1,5 @@
-import { LayoutDashboard, Users, Map, GraduationCap, LogIn, LogOut, UserCircle } from 'lucide-react';
-import { MITLogo } from './MITLogo';
+import { LayoutDashboard, Users, Map, LogIn, LogOut, UserCircle } from 'lucide-react';
+import { MITLogo, MITSeal } from './MITLogo';
 import type { FacultyAccount } from '../types';
 
 export type View = 'dashboard' | 'grid' | 'floor';
@@ -38,9 +38,7 @@ export function Sidebar({ activeView, onViewChange, loggedInAccount, onLoginClic
       <div className="px-4 py-5 border-b border-slate-800 flex flex-col items-center gap-3">
         <MITLogo />
         <div className="flex items-center gap-2">
-          <div className="w-7 h-7 bg-indigo-600 rounded-lg flex items-center justify-center flex-shrink-0">
-            <GraduationCap className="w-4 h-4 text-white" />
-          </div>
+          <MITSeal size={28} />
           <div>
             <p className="font-bold text-white text-xs leading-tight">Faculty Hub</p>
             <p className="text-xs text-slate-400 leading-tight">MIT School of Computing</p>

@@ -1,51 +1,39 @@
-import { useState } from 'react';
+import { useState, useCallback } from 'react';
 import { Sidebar, MobileNav } from './components/Sidebar';
 import { Dashboard } from './components/Dashboard';
 import { FacultyGrid } from './components/FacultyGrid';
 import { FloorView } from './components/FloorView';
 import { AuthModal } from './components/AuthModal';
 import { AccountModal } from './components/AccountModal';
-import { MITLogo } from './components/MITLogo';
+import { MITLogo, MITSeal } from './components/MITLogo';
 import { useFacultyStatus } from './hooks/useFacultyStatus';
 import { useAuth } from './hooks/useAuth';
 import { useFacultyAccounts } from './hooks/useFacultyAccounts';
 import type { View } from './components/Sidebar';
+import type { FacultyAccount } from './types';
 
 export default function App() {
   const [activeView, setActiveView] = useState<View>('dashboard');
   const [showAuthModal, setShowAuthModal]       = useState(false);
   const [showAccountModal, setShowAccountModal] = useState(false);
 
-  // Status overrides
   const { overrides, setStatus, clearStatus, clearAll, overrideCount } = useFacultyStatus();
+  const { loggedInEmail, loggedInAccount, login, logout, register, updateAccount, deleteAccount, changePin } = useAuth();
+  const { linkedFacultyIds, refresh: refreshLinkedIds } = useFacultyAccounts();
 
-  // Auth
-  const { loggedInEmail, login, logout } = useAuth();
-
-  // Accounts
-  const {
-    accounts,
-    createAccount,
-    updateAccount,
-    deleteAccount,
-    getAccountByEmail,
-    getAccountByFacultyId,
-    verifyPin,
-    hasAccount,
-  } = useFacultyAccounts();
-
-  const loggedInAccount = loggedInEmail ? getAccountByEmail(loggedInEmail) : null;
+  const getAccountByFacultyId = useCallback(
+    (id: number): FacultyAccount | undefined =>
+      loggedInAccount?.linkedFacultyId === id ? loggedInAccount : undefined,
+    [loggedInAccount]
+  );
 
   const handleLogout = () => {
     logout();
     setShowAccountModal(false);
   };
 
-  const handleDeleteAccount = () => {
-    if (loggedInEmail) {
-      deleteAccount(loggedInEmail);
-      logout();
-    }
+  const handleDeleteAccount = async () => {
+    await deleteAccount();
     setShowAccountModal(false);
   };
 
@@ -79,9 +67,7 @@ export default function App() {
             <div className="flex items-center gap-3">
               {/* Mobile brand */}
               <div className="md:hidden flex items-center gap-2">
-                <div className="w-7 h-7 bg-indigo-600 rounded-lg flex items-center justify-center">
-                  <span className="text-white text-xs font-bold">FH</span>
-                </div>
+                <MITSeal size={28} />
               </div>
               <div>
                 <h1 className="font-bold text-slate-800 text-lg leading-tight">{title}</h1>
@@ -130,7 +116,6 @@ export default function App() {
               onSetStatus={setStatus}
               onClearStatus={clearStatus}
               loggedInEmail={loggedInEmail}
-              accounts={accounts}
               getAccountByFacultyId={getAccountByFacultyId}
               onOpenAccount={() => setShowAccountModal(true)}
               onLoginClick={() => setShowAuthModal(true)}
@@ -161,11 +146,13 @@ export default function App() {
       {/* ── Modals ── */}
       {showAuthModal && (
         <AuthModal
-          accounts={accounts}
-          hasAccount={hasAccount}
-          verifyPin={verifyPin}
-          onCreateAccount={createAccount}
+          linkedFacultyIds={linkedFacultyIds}
           onLogin={login}
+          onRegister={async (data) => {
+            const err = await register(data);
+            if (!err) refreshLinkedIds();
+            return err;
+          }}
           onClose={() => setShowAuthModal(false)}
         />
       )}
@@ -173,7 +160,8 @@ export default function App() {
       {showAccountModal && loggedInAccount && (
         <AccountModal
           account={loggedInAccount}
-          onSave={updates => updateAccount(loggedInAccount.email, updates)}
+          onSave={updateAccount}
+          onChangePin={changePin}
           onLogout={handleLogout}
           onDeleteAccount={handleDeleteAccount}
           onClose={() => setShowAccountModal(false)}

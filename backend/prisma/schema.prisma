@@ -1,0 +1,66 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model FacultyRecord {
+  id            Int     @id
+  title         String
+  name          String
+  fullName      String
+  block         String
+  floor         String
+  cabinPosition String
+  cabinType     String
+  rawRemark     String  @default("")
+  remarkType    String  @default("none")
+  isHOD         Boolean @default(false)
+
+  accounts       FacultyAccount[]
+  statusOverride StatusOverride?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@map("faculty_records")
+}
+
+model FacultyAccount {
+  id           Int    @id @default(autoincrement())
+  email        String @unique
+  pinHash      String
+  title        String
+  name         String
+  fullName     String
+  block        String
+  floor        String
+  cabinPosition String
+  photoDataUrl String?
+  phone        String?
+  role         String @default("faculty")
+
+  linkedFacultyId Int?
+  linkedFaculty   FacultyRecord? @relation(fields: [linkedFacultyId], references: [id])
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@map("faculty_accounts")
+}
+
+model StatusOverride {
+  id        Int    @id @default(autoincrement())
+  facultyId Int    @unique
+  faculty   FacultyRecord @relation(fields: [facultyId], references: [id], onDelete: Cascade)
+  status    String
+  note      String?
+  updatedBy String?
+
+  updatedAt DateTime @updatedAt
+
+  @@map("status_overrides")
+}

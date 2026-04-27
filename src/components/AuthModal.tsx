@@ -1,9 +1,10 @@
 import { useState, useEffect, useRef } from 'react';
 import { X, Search, Eye, EyeOff, ChevronLeft, UserCheck, Mail, Lock, User, MapPin } from 'lucide-react';
-import { MITLogo } from './MITLogo';
+import { MITSeal } from './MITLogo';
 import { FACULTY_DATA } from '../data/faculty';
 import { BLOCK_TO_FLOOR } from '../utils/floorUtils';
-import type { FacultyRecord, FacultyAccount, FacultyTitle, BlockCode, FloorKey, FacultyAccounts } from '../types';
+import type { FacultyRecord, FacultyTitle, BlockCode, FloorKey } from '../types';
+import type { RegisterPayload } from '../api/client';
 
 const TITLES: FacultyTitle[] = ['Dr.', 'Prof.', 'Mr.', 'Mrs.', 'Ms.', 'Miss.'];
 
@@ -20,11 +21,9 @@ type Mode = 'signin' | 'signup';
 type SignupStep = 'find' | 'credentials' | 'profile';
 
 interface Props {
-  accounts: FacultyAccounts;
-  hasAccount: (email: string) => boolean;
-  verifyPin: (email: string, pin: string) => boolean;
-  onCreateAccount: (account: FacultyAccount) => void;
-  onLogin: (email: string) => void;
+  linkedFacultyIds: Set<number>;
+  onLogin: (email: string, pin: string) => Promise<string | null>;
+  onRegister: (data: RegisterPayload) => Promise<string | null>;
   onClose: () => void;
 }
 
@@ -40,7 +39,7 @@ const EMPTY_FORM = {
   phone: '',
 };
 
-export function AuthModal({ accounts, hasAccount, verifyPin, onCreateAccount, onLogin, onClose }: Props) {
+export function AuthModal({ linkedFacultyIds, onLogin, onRegister, onClose }: Props) {
   const [mode, setMode] = useState<Mode>('signin');
   const [step, setStep] = useState<SignupStep>('find');
   const [search, setSearch] = useState('');
@@ -48,13 +47,13 @@ export function AuthModal({ accounts, hasAccount, verifyPin, onCreateAccount, on
   const [form, setForm] = useState(EMPTY_FORM);
   const [errors, setErrors] = useState<Partial<Record<keyof typeof EMPTY_FORM | 'general', string>>>({});
   const [showPin, setShowPin] = useState(false);
+  const [loading, setLoading] = useState(false);
   const [success, setSuccess] = useState(false);
   const [signInEmail, setSignInEmail] = useState('');
   const [signInPin, setSignInPin] = useState('');
   const [signInError, setSignInError] = useState('');
   const emailRef = useRef<HTMLInputElement>(null);
 
-  // Close on Escape
   useEffect(() => {
     const h = (e: KeyboardEvent) => { if (e.key === 'Escape') onClose(); };
     window.addEventListener('keydown', h);
@@ -76,19 +75,23 @@ export function AuthModal({ accounts, hasAccount, verifyPin, onCreateAccount, on
   );
 
   // ── Sign In ────────────────────────────────────────────────────────────────
-  const handleSignIn = () => {
+  const handleSignIn = async () => {
     setSignInError('');
     const email = signInEmail.trim().toLowerCase();
     if (!email) { setSignInError('Please enter your email address.'); return; }
-    if (!hasAccount(email)) { setSignInError('No account found with this email. Please sign up.'); return; }
     if (signInPin.length < 4) { setSignInError('Please enter your 4-digit PIN.'); return; }
-    if (!verifyPin(email, signInPin)) {
-      setSignInError('Incorrect PIN. Please try again.');
+
+    setLoading(true);
+    const err = await onLogin(email, signInPin);
+    setLoading(false);
+
+    if (err) {
+      setSignInError(err);
       setSignInPin('');
-      return;
+    } else {
+      setSuccess(true);
+      setTimeout(() => onClose(), 900);
     }
-    setSuccess(true);
-    setTimeout(() => { onLogin(email); onClose(); }, 900);
   };
 
   // ── Sign Up: Step 1 — select record ───────────────────────────────────────
@@ -114,11 +117,7 @@ export function AuthModal({ accounts, hasAccount, verifyPin, onCreateAccount, on
   const handleCredentialsNext = () => {
     const errs: typeof errors = {};
     const email = form.email.trim().toLowerCase();
-    if (!email || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
-      errs.email = 'Enter a valid email address.';
-    } else if (hasAccount(email)) {
-      errs.email = 'An account with this email already exists. Sign in instead.';
-    }
+    if (!email || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) errs.email = 'Enter a valid email address.';
     if (form.pin.length !== 4) errs.pin = 'PIN must be exactly 4 digits.';
     if (form.confirmPin !== form.pin) errs.confirmPin = 'PINs do not match.';
     setErrors(errs);
@@ -126,17 +125,15 @@ export function AuthModal({ accounts, hasAccount, verifyPin, onCreateAccount, on
   };
 
   // ── Sign Up: Step 3 — create account ──────────────────────────────────────
-  const handleCreateAccount = () => {
+  const handleCreateAccount = async () => {
     const errs: typeof errors = {};
     if (!form.name.trim()) errs.name = 'Name is required.';
     if (!form.cabinPosition.trim()) errs.cabinPosition = 'Cabin / seat is required.';
     setErrors(errs);
     if (Object.keys(errs).length > 0) return;
 
-    const now = new Date().toISOString();
-    const email = form.email.trim().toLowerCase();
-    const account: FacultyAccount = {
-      email,
+    const payload: RegisterPayload = {
+      email: form.email.trim().toLowerCase(),
       pin: form.pin,
       title: form.title,
       name: form.name.trim(),
@@ -146,21 +143,24 @@ export function AuthModal({ accounts, hasAccount, verifyPin, onCreateAccount, on
       cabinPosition: form.cabinPosition.trim(),
       phone: form.phone.trim() || undefined,
       linkedFacultyId: selectedRecord?.id,
-      createdAt: now,
-      updatedAt: now,
     };
-    onCreateAccount(account);
-    setSuccess(true);
-    setTimeout(() => { onLogin(email); onClose(); }, 1000);
+
+    setLoading(true);
+    const err = await onRegister(payload);
+    setLoading(false);
+
+    if (err) {
+      setErrors({ general: err });
+    } else {
+      setSuccess(true);
+      setTimeout(() => onClose(), 1000);
+    }
   };
 
   const setField = (key: keyof typeof EMPTY_FORM, value: string) => {
     setForm(prev => {
       const next = { ...prev, [key]: value };
-      // Auto-fill floor when block changes
-      if (key === 'block') {
-        next.floor = BLOCK_TO_FLOOR[value as BlockCode] ?? prev.floor;
-      }
+      if (key === 'block') next.floor = BLOCK_TO_FLOOR[value as BlockCode] ?? prev.floor;
       return next;
     });
     setErrors(prev => ({ ...prev, [key]: undefined }));
@@ -183,7 +183,6 @@ export function AuthModal({ accounts, hasAccount, verifyPin, onCreateAccount, on
     setSuccess(false);
   };
 
-  // ── Shared header ──────────────────────────────────────────────────────────
   const isSignup = mode === 'signup';
 
   return (
@@ -202,7 +201,7 @@ export function AuthModal({ accounts, hasAccount, verifyPin, onCreateAccount, on
                 <ChevronLeft className="w-5 h-5" />
               </button>
             )}
-            <MITSealSmall />
+            <MITSeal size={32} />
             <div>
               <p className="text-white font-bold text-sm leading-tight">Faculty Hub</p>
               <p className="text-slate-400 text-xs leading-tight">MIT School of Computing</p>
@@ -261,7 +260,6 @@ export function AuthModal({ accounts, hasAccount, verifyPin, onCreateAccount, on
               <p className="text-sm text-slate-500 mt-0.5">Sign in to your Faculty Hub account</p>
             </div>
 
-            {/* Email */}
             <div>
               <label className="block text-xs font-semibold text-slate-600 uppercase tracking-wider mb-1.5">
                 Email Address
@@ -280,7 +278,6 @@ export function AuthModal({ accounts, hasAccount, verifyPin, onCreateAccount, on
               </div>
             </div>
 
-            {/* PIN */}
             <div>
               <label className="block text-xs font-semibold text-slate-600 uppercase tracking-wider mb-1.5">
                 4-Digit PIN
@@ -313,9 +310,10 @@ export function AuthModal({ accounts, hasAccount, verifyPin, onCreateAccount, on
 
             <button
               onClick={handleSignIn}
-              className="w-full py-2.5 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl font-semibold text-sm transition-colors"
+              disabled={loading}
+              className="w-full py-2.5 bg-indigo-600 hover:bg-indigo-700 disabled:opacity-60 text-white rounded-xl font-semibold text-sm transition-colors"
             >
-              Sign In
+              {loading ? 'Signing in…' : 'Sign In'}
             </button>
 
             <p className="text-center text-xs text-slate-500">
@@ -343,7 +341,6 @@ export function AuthModal({ accounts, hasAccount, verifyPin, onCreateAccount, on
               <p className="text-sm text-slate-500 mt-0.5">Search your name in the seating directory to pre-fill your details.</p>
             </div>
 
-            {/* Search */}
             <div className="px-6 pb-2 flex-shrink-0">
               <div className="relative">
                 <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
@@ -358,13 +355,12 @@ export function AuthModal({ accounts, hasAccount, verifyPin, onCreateAccount, on
               </div>
             </div>
 
-            {/* List */}
             <div className="overflow-y-auto flex-1 px-4 pb-2 space-y-0.5" style={{ minHeight: 220, maxHeight: 280 }}>
               {filtered.length === 0 ? (
                 <p className="text-center text-sm text-slate-400 py-8">No results found</p>
               ) : (
                 filtered.map(f => {
-                  const alreadyLinked = Object.values(accounts).some(a => a.linkedFacultyId === f.id);
+                  const alreadyLinked = linkedFacultyIds.has(f.id);
                   return (
                     <button
                       key={f.id}
@@ -396,7 +392,6 @@ export function AuthModal({ accounts, hasAccount, verifyPin, onCreateAccount, on
               )}
             </div>
 
-            {/* Divider + skip */}
             <div className="px-6 py-4 border-t border-slate-100 flex-shrink-0">
               <button
                 onClick={handleSkipRecord}
@@ -429,7 +424,6 @@ export function AuthModal({ accounts, hasAccount, verifyPin, onCreateAccount, on
               )}
             </div>
 
-            {/* Email */}
             <div>
               <label className="block text-xs font-semibold text-slate-600 uppercase tracking-wider mb-1.5">
                 Email Address <span className="text-red-400">*</span>
@@ -448,7 +442,6 @@ export function AuthModal({ accounts, hasAccount, verifyPin, onCreateAccount, on
               {errors.email && <p className="text-xs text-red-500 mt-1">{errors.email}</p>}
             </div>
 
-            {/* PIN */}
             <div>
               <label className="block text-xs font-semibold text-slate-600 uppercase tracking-wider mb-1.5">
                 Create a 4-Digit PIN <span className="text-red-400">*</span>
@@ -475,7 +468,6 @@ export function AuthModal({ accounts, hasAccount, verifyPin, onCreateAccount, on
               {errors.pin && <p className="text-xs text-red-500 mt-1">{errors.pin}</p>}
             </div>
 
-            {/* Confirm PIN */}
             <div>
               <label className="block text-xs font-semibold text-slate-600 uppercase tracking-wider mb-1.5">
                 Confirm PIN <span className="text-red-400">*</span>
@@ -515,7 +507,6 @@ export function AuthModal({ accounts, hasAccount, verifyPin, onCreateAccount, on
               <p className="text-sm text-slate-500 mt-0.5">Review and complete your details. You can edit these later.</p>
             </div>
 
-            {/* Title + Name */}
             <div className="flex gap-2">
               <div className="w-28 flex-shrink-0">
                 <label className="block text-xs font-semibold text-slate-600 uppercase tracking-wider mb-1.5">Title</label>
@@ -545,7 +536,6 @@ export function AuthModal({ accounts, hasAccount, verifyPin, onCreateAccount, on
               </div>
             </div>
 
-            {/* Block + Floor */}
             <div className="flex gap-2">
               <div className="flex-1 min-w-0">
                 <label className="block text-xs font-semibold text-slate-600 uppercase tracking-wider mb-1.5">Block</label>
@@ -571,7 +561,6 @@ export function AuthModal({ accounts, hasAccount, verifyPin, onCreateAccount, on
               </div>
             </div>
 
-            {/* Cabin / Seat */}
             <div>
               <label className="block text-xs font-semibold text-slate-600 uppercase tracking-wider mb-1.5">
                 Cabin / Seat Position <span className="text-red-400">*</span>
@@ -586,7 +575,6 @@ export function AuthModal({ accounts, hasAccount, verifyPin, onCreateAccount, on
               {errors.cabinPosition && <p className="text-xs text-red-500 mt-1">{errors.cabinPosition}</p>}
             </div>
 
-            {/* Phone */}
             <div>
               <label className="block text-xs font-semibold text-slate-600 uppercase tracking-wider mb-1.5">Phone (optional)</label>
               <input
@@ -598,12 +586,17 @@ export function AuthModal({ accounts, hasAccount, verifyPin, onCreateAccount, on
               />
             </div>
 
+            {errors.general && (
+              <p className="text-sm text-red-500 bg-red-50 border border-red-200 rounded-lg px-3 py-2">{errors.general}</p>
+            )}
+
             <button
               onClick={handleCreateAccount}
-              className="w-full py-2.5 bg-green-600 hover:bg-green-700 text-white rounded-xl font-semibold text-sm transition-colors flex items-center justify-center gap-2"
+              disabled={loading}
+              className="w-full py-2.5 bg-green-600 hover:bg-green-700 disabled:opacity-60 text-white rounded-xl font-semibold text-sm transition-colors flex items-center justify-center gap-2"
             >
               <UserCheck className="w-4 h-4" />
-              Create Account &amp; Sign In
+              {loading ? 'Creating account…' : 'Create Account & Sign In'}
             </button>
 
             <p className="text-center text-xs text-slate-400">
@@ -617,20 +610,6 @@ export function AuthModal({ accounts, hasAccount, verifyPin, onCreateAccount, on
 }
 
 // ── Small helpers ────────────────────────────────────────────────────────────
-
-function MITSealSmall() {
-  return (
-    <div
-      className="w-8 h-8 rounded-full flex items-center justify-center flex-shrink-0 text-white font-black border-2"
-      style={{ background: 'linear-gradient(135deg,#5a1a8c,#7b2fc0)', borderColor: '#c9a227', fontSize: 8 }}
-    >
-      <div className="text-center leading-tight">
-        <div>MIT</div>
-        <div style={{ fontSize: 6 }}>ADT</div>
-      </div>
-    </div>
-  );
-}
 
 function StepDots({ current }: { current: number }) {
   return (
