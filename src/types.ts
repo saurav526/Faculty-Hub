@@ -82,6 +82,9 @@ export interface FacultyAccount {
   floor: FloorKey;
   cabinPosition: string;
 
+  // Role
+  role: string;             // 'faculty' | 'admin'
+
   // Optional profile fields
   photoDataUrl?: string;    // base64 data URL
   phone?: string;
