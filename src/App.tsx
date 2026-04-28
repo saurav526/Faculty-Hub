@@ -112,7 +112,7 @@ export default function App() {
         {/* View content */}
         <div className="flex-1 px-5 md:px-8 py-6">
           {activeView === 'dashboard' && (
-            <Dashboard overrides={overrides} overrideCount={overrideCount} onClearAll={clearAll} />
+            <Dashboard overrides={overrides} overrideCount={overrideCount} onClearAll={clearAll} isAdmin={loggedInAccount?.role === 'admin'} />
           )}
           {activeView === 'grid' && (
             <FacultyGrid

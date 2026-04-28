@@ -49,7 +49,7 @@ export interface FacultyRecord {
   isHOD: boolean;
 }
 
-// ─── Status Overrides (stored in localStorage) ───────────────────────────────
+// ─── Status Overrides ────────────────────────────────────────────────────────
 export interface StatusOverride {
   status: FacultyStatus;
   updatedAt: string;    // ISO timestamp
@@ -69,25 +69,9 @@ export interface FilterState {
   remarkTypes: RemarkType[];
 }
 
-// ─── Faculty Profile (legacy — kept for type compatibility) ──────────────────
-export interface FacultyProfile {
-  facultyId: number;
-  pin: string;
-  photoDataUrl?: string;
-  email?: string;
-  phone?: string;
-  setupAt: string;
-  updatedAt: string;
-}
-export interface FacultyProfiles {
-  [facultyId: number]: FacultyProfile;
-}
-
-// ─── Faculty Account (proper sign-up / sign-in system) ───────────────────────
+// ─── Faculty Account ─────────────────────────────────────────────────────────
 export interface FacultyAccount {
   email: string;            // unique identifier + login credential
-  pin?: string;             // only present in old localStorage data; backend never returns it
-
   // Personal info — fully editable by the faculty member
   title: FacultyTitle;
   name: string;             // name without title prefix

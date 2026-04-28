@@ -11,6 +11,7 @@ interface Props {
   overrides: StatusOverrides;
   overrideCount: number;
   onClearAll: () => void;
+  isAdmin?: boolean;
 }
 
 const ALL_STATUSES: FacultyStatus[] = ['available', 'in_class', 'away', 'on_leave'];
@@ -19,7 +20,7 @@ const NOTABLE_REMARKS: RemarkType[] = [
   'medical_leave', 'maternity_leave', 'on_leave', 'shifted', 'sharing', 'entrepreneurship',
 ];
 
-export function Dashboard({ overrides, overrideCount, onClearAll }: Props) {
+export function Dashboard({ overrides, overrideCount, onClearAll, isAdmin }: Props) {
   const stats = useMemo(() => {
     const byStatus: Record<FacultyStatus, number> = {
       available: 0, in_class: 0, away: 0, on_leave: 0,
@@ -83,7 +84,7 @@ export function Dashboard({ overrides, overrideCount, onClearAll }: Props) {
       <div className="bg-white rounded-2xl border border-slate-200 p-5">
         <div className="flex items-center justify-between mb-4">
           <h2 className="font-semibold text-slate-800">Status Overview</h2>
-          {overrideCount > 0 && (
+          {overrideCount > 0 && isAdmin && (
             <button
               onClick={onClearAll}
               className="text-xs text-red-500 hover:text-red-700 font-medium"
